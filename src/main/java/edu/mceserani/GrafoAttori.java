@@ -4,18 +4,19 @@ import java.io.*;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntSet;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntArrays;
 
 /**
- * Punto A1: lettura di name.basics.tsv e costruzione della mappa
- * Int2ObjectOpenHashMap<Integer, Attore> (chiave = codice attore int).
+ * Punto A1 + A2: 
+ *  - A1: lettura di name.basics.tsv e costruzione della mappa Int2ObjectOpenHashMap<Integer,Attore>
+ *  - A2: scansione di title.principals.tsv e costruzione del grafo (set di coprotagonisti per attore)
  *
- * Uso (solo A1):
+ * Uso (A1+A2):
  *   javac -cp fastutil.jar CreaGrafo.java
- *   java  -cp .:fastutil.jar CreaGrafo ../data/name.basics.tsv
+ *   java  -cp .:fastutil.jar CreaGrafo ../data/name.basics.tsv ../data/title.principals.tsv
  */
 public class GrafoAttori {
-
-	private GrafoAttori() { } // non instanziabile
 
     // ===================== Modello dati (A1) =====================
     public static final class Attore {
@@ -32,13 +33,76 @@ public class GrafoAttori {
         }
     }
 
-    // ===================== MAIN (A1) =====================
+    // ===================== A2: costruzione del grafo da title.principals.tsv =====================
+    /**
+     * Scansione singola di title.principals.tsv. Per ogni titolo raccoglie il cast degli attori già
+     * selezionati (presenti in attoriByCodice) e collega tutte le coppie (u,v) simmetricamente.
+     * Il buffer cast è riutilizzato tra un titolo e l'altro. Dedup finale per sicurezza.
+     */
+    static void buildGraphFromTitlePrincipals(String pathPrincipals, Int2ObjectOpenHashMap<Attore> attoriByCodice) throws Exception {
+        try (BufferedReader br = new BufferedReader(new FileReader(pathPrincipals))) {
+            String line = br.readLine(); // header
+            String prevT = null;
+            IntArrayList cast = new IntArrayList(32); // buffer riutilizzabile per il cast del titolo corrente
+
+            // Funzione locale: al cambio titolo, collega le coppie del cast
+            java.util.function.Consumer<IntArrayList> flushTitle = (lst) -> {
+                if (lst.isEmpty()) return;
+                int[] a = lst.elements();
+                int n = lst.size();
+                // ordina e deduplica in-place
+                IntArrays.quickSort(a, 0, n);
+                int w = 0;
+                for (int i = 0; i < n; i++) {
+                    if (i == 0 || a[i] != a[i - 1]) a[w++] = a[i];
+                }
+                lst.size(w);
+                // collega tutte le coppie u<v, inserimento simmetrico
+                for (int i = 0; i < w; i++) {
+                    int u = a[i];
+                    Attore au = attoriByCodice.get(u);
+                    if (au == null) continue;
+                    for (int j = i + 1; j < w; j++) {
+                        int v = a[j];
+                        Attore av = attoriByCodice.get(v);
+                        if (av == null) continue;
+                        au.co.add(v);
+                        av.co.add(u);
+                    }
+                }
+                lst.clear();
+            };
+
+            while ((line = br.readLine()) != null) {
+                String[] f = line.split("\t", -1);
+                if (f.length < 3) continue; // riga malformata
+                String tconst = f[0];
+                String nconst = f[2];
+
+                // flush sul cambio titolo
+                if (prevT != null && !tconst.equals(prevT)) {
+                    flushTitle.accept(cast);
+                }
+
+                int personCode = parseNumericId(nconst);
+                if (attoriByCodice.containsKey(personCode)) {
+                    cast.add(personCode);
+                }
+                prevT = tconst;
+            }
+            // flush ultimo titolo
+            flushTitle.accept(cast);
+        }
+    }
+
+    // ===================== MAIN (A1+A2) =====================
     public static void main(String[] args) throws Exception {
-        if (args.length < 1) {
-            System.err.println("Uso: java CreaGrafo <path/name.basics.tsv>");
+        if (args.length < 2) {
+            System.err.println("Uso: java CreaGrafo <path/name.basics.tsv> <path/title.principals.tsv>");
             System.exit(1);
         }
         String nameBasicsPath = args[0];
+        String titlePrincipalsPath = args[1];
 
         // Preallocazione: ~383k attori previsti → capacity ~512k con LF 0.75
         Int2ObjectOpenHashMap<Attore> attoriByCodice = new Int2ObjectOpenHashMap<>(512_000, 0.75f);
@@ -67,10 +131,24 @@ public class GrafoAttori {
             }
         }
 
-        // Log di verifica rapido (solo A1)
+        long t0 = System.currentTimeMillis();
+        buildGraphFromTitlePrincipals(titlePrincipalsPath, attoriByCodice);
+        long t1 = System.currentTimeMillis();
+
+        // Log di verifica rapido (A2): conteggio grezzo degli archi (diretti) sommando i gradi
+        long sommaGradi = 0;
+        int nodiConVicini = 0;
+        for (Int2ObjectOpenHashMap.Entry<Attore> e : attoriByCodice.int2ObjectEntrySet()) {
+            int deg = e.getValue().co.size();
+            sommaGradi += deg;
+            if (deg > 0) nodiConVicini++;
+        }
+
         System.out.println("[A1] Righe lette: " + nTot);
         System.out.println("[A1] Attori selezionati: " + nAttori);
-        System.out.println("[A1] Dimensione mappa: " + attoriByCodice.size());
+        System.out.println("[A2] Costruzione grafo completata in " + (t1 - t0) + " ms");
+        System.out.println("[A2] Somma dei gradi (archi diretti): " + sommaGradi);
+        System.out.println("[A2] Nodi con almeno un vicino: " + nodiConVicini);
     }
 
     // ===================== Utility parsing =====================
