@@ -1,6 +1,9 @@
 package edu.mceserani;
 
 import java.io.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntSet;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
@@ -25,6 +28,7 @@ public class GrafoAttori {
         public final int anno;     // birthYear
         // In A2 useremo questo set per accumulare i coprotagonisti (evita duplicati).
         public final IntSet co;    // insieme di codici attori adiacenti (temporaneo)
+        public int[] adj;     // adiacenze finali ordinate (riempite in A3)
         Attore(int codice, String nome, int anno) {
             this.codice = codice;
             this.nome = nome;
@@ -95,6 +99,46 @@ public class GrafoAttori {
         }
     }
 
+     // ===================== A3: scrittura nomi.tsv e grafo.tsv =====================
+    static void writeOutputs(Int2ObjectOpenHashMap<Attore> attoriByCodice, String outDir) throws Exception {
+        File out = new File(outDir);
+        if (!out.exists()) out.mkdirs();
+        File fNomi = new File(out, "nomi.tsv");
+        File fGrafo = new File(out, "grafo.tsv");
+
+        // Raccogli attori e ordina per codice
+        ArrayList<Attore> list = new ArrayList<>(attoriByCodice.size());
+        for (Int2ObjectOpenHashMap.Entry<Attore> e : attoriByCodice.int2ObjectEntrySet()) {
+            list.add(e.getValue());
+        }
+        list.sort(Comparator.comparingInt(a -> a.codice));
+
+        try (PrintWriter pwN = new PrintWriter(new BufferedWriter(new FileWriter(fNomi)));
+             PrintWriter pwG = new PrintWriter(new BufferedWriter(new FileWriter(fGrafo)))) {
+            for (Attore a : list) {
+                // nomi.tsv
+                pwN.printf("%d	%s	%d%n", a.codice, a.nome, a.anno);
+
+                // converte il set temporaneo in array ordinato e libera il set
+                int[] adj = ((IntOpenHashSet)a.co).toIntArray();
+                IntArrays.quickSort(adj);
+                a.adj = adj;
+
+                // grafo.tsv
+                pwG.print(a.codice);
+                pwG.print('	');
+                pwG.print(adj.length);
+                for (int v : adj) { pwG.print('	'); pwG.print(v); }
+                pwG.println();
+            }
+        }
+
+        // opzionale: liberare i set per ridurre memoria di picco post-scrittura
+        for (Attore a : list) {
+            if (a.co != null) { a.co.clear(); }
+        }
+    }
+
     // ===================== MAIN (A1+A2) =====================
     public static void main(String[] args) throws Exception {
         if (args.length < 2) {
@@ -149,6 +193,10 @@ public class GrafoAttori {
         System.out.println("[A2] Costruzione grafo completata in " + (t1 - t0) + " ms");
         System.out.println("[A2] Somma dei gradi (archi diretti): " + sommaGradi);
         System.out.println("[A2] Nodi con almeno un vicino: " + nodiConVicini);
+    
+        // ===================== A3: finalizzazione e scrittura output =====================
+        writeOutputs(attoriByCodice, "../out");
+        System.out.println("[A3] Scrittura di out/nomi.tsv e out/grafo.tsv completata.");
     }
 
     // ===================== Utility parsing =====================
