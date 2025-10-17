@@ -16,7 +16,7 @@ import it.unimi.dsi.fastutil.ints.IntArrays;
  *   javac -cp fastutil.jar CreaGrafo.java
  *   java  -cp .:fastutil.jar CreaGrafo ../data/name.basics.tsv ../data/title.principals.tsv
  */
-public class GrafoAttori {
+public class CreaGrafo {
 
     // ===================== Modello dati (A1) =====================
     public static final class Attore {
