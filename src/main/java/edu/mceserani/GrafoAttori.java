@@ -11,11 +11,12 @@ import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntArrays;
 
 /**
- * Punto A1 + A2: 
+ * Punto A1 + A2 + A3: 
  *  - A1: lettura di name.basics.tsv e costruzione della mappa Int2ObjectOpenHashMap<Integer,Attore>
  *  - A2: scansione di title.principals.tsv e costruzione del grafo (set di coprotagonisti per attore)
+ *  - A3: scrittura di out/nomi.tsv e out/grafo.tsv
  *
- * Uso (A1+A2):
+ * Uso (A1+A2+A3):
  *   javac -cp fastutil.jar CreaGrafo.java
  *   java  -cp .:fastutil.jar CreaGrafo ../data/name.basics.tsv ../data/title.principals.tsv
  */
